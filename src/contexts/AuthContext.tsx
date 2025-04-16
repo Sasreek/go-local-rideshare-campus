@@ -1,19 +1,25 @@
 
 import React, { createContext, useState, useContext, useEffect, ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
+import { Session, User } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 // Define the User type
-type User = {
+type Profile = {
   id: string;
-  email: string;
-  name?: string;
-} | null;
+  full_name?: string;
+  avatar_url?: string;
+  university?: string;
+};
 
 // Define the AuthContext type
 interface AuthContextType {
-  user: User;
+  user: User | null;
+  profile: Profile | null;
+  session: Session | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, name: string) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string) => Promise<void>;
   signOut: () => Promise<void>;
   loading: boolean;
 }
@@ -28,42 +34,86 @@ interface AuthProviderProps {
 
 // Create the AuthProvider component
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [user, setUser] = useState<User>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const navigate = useNavigate();
 
-  // When Supabase is connected, useEffect will check for existing session
+  // Fetch profile when user changes
   useEffect(() => {
-    // Check if user is already logged in
-    const checkUser = async () => {
+    const fetchProfile = async () => {
+      if (!user) {
+        setProfile(null);
+        return;
+      }
+
       try {
-        // This is where you would typically check Supabase for an existing session
-        setLoading(false);
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error('Error fetching profile:', error);
+          return;
+        }
+
+        setProfile(data);
       } catch (error) {
-        console.error("Error checking authentication:", error);
-        setLoading(false);
+        console.error('Unexpected error fetching profile:', error);
       }
     };
 
-    checkUser();
+    fetchProfile();
+  }, [user]);
+
+  // When Supabase is connected, useEffect will check for existing session
+  useEffect(() => {
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, currentSession) => {
+        // Only synchronous state updates here
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        
+        // Handle auth events
+        if (event === 'SIGNED_IN') {
+          toast.success('Successfully signed in');
+        } else if (event === 'SIGNED_OUT') {
+          toast.success('Successfully signed out');
+        }
+      }
+    );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+      setLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Sign in function
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
-      // This is where you would typically call Supabase signIn
-      console.log("Signing in with", email);
-      
-      // Mock successful login for demo
-      toast.success("Login successful!");
-      
-      // After connecting Supabase, this would use the actual user data
-      setUser({
-        id: "mock-user-id",
-        email: email,
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
-    } catch (error) {
-      toast.error("Failed to sign in");
+
+      if (error) throw error;
+      
+      // User will be set by the onAuthStateChange listener
+      navigate('/');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to sign in');
       throw error;
     } finally {
       setLoading(false);
@@ -71,23 +121,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   // Sign up function
-  const signUp = async (email: string, password: string, name: string) => {
+  const signUp = async (email: string, password: string, fullName: string) => {
     try {
       setLoading(true);
-      // This is where you would typically call Supabase signUp
-      console.log("Signing up with", email);
-      
-      // Mock successful signup for demo
-      toast.success("Account created successfully!");
-      
-      // After connecting Supabase, this would use the actual user data
-      setUser({
-        id: "mock-user-id",
-        email: email,
-        name: name,
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
+        },
       });
-    } catch (error) {
-      toast.error("Failed to create account");
+
+      if (error) throw error;
+
+      toast.success('Account created successfully! Please check your email for verification.');
+      navigate('/auth');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create account');
       throw error;
     } finally {
       setLoading(false);
@@ -98,13 +150,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signOut = async () => {
     try {
       setLoading(true);
-      // This is where you would typically call Supabase signOut
-      console.log("Signing out");
+      const { error } = await supabase.auth.signOut();
       
-      toast.success("You have been logged out");
-      setUser(null);
-    } catch (error) {
-      toast.error("Failed to sign out");
+      if (error) throw error;
+      
+      // User will be set to null by the onAuthStateChange listener
+      navigate('/');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to sign out');
       throw error;
     } finally {
       setLoading(false);
@@ -114,6 +167,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // Create the context value
   const value = {
     user,
+    profile,
+    session,
     signIn,
     signUp,
     signOut,
