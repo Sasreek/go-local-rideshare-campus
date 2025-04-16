@@ -40,10 +40,12 @@ const Navbar = () => {
               <Link to="/contact" className="text-golocal-secondary hover:text-golocal-primary transition-colors">
                 Contact
               </Link>
-              <Button className="ml-4 flex items-center" variant="outline">
-                <User className="h-4 w-4 mr-2" />
-                Sign In
-              </Button>
+              <Link to="/auth">
+                <Button className="ml-4 flex items-center" variant="outline">
+                  <User className="h-4 w-4 mr-2" />
+                  Sign In
+                </Button>
+              </Link>
             </div>
           </div>
           
@@ -99,10 +101,12 @@ const Navbar = () => {
             >
               Contact
             </Link>
-            <Button className="w-full mt-4 flex items-center justify-center" variant="outline">
-              <User className="h-4 w-4 mr-2" />
-              Sign In
-            </Button>
+            <Link to="/auth" onClick={toggleMenu}>
+              <Button className="w-full mt-4 flex items-center justify-center" variant="outline">
+                <User className="h-4 w-4 mr-2" />
+                Sign In
+              </Button>
+            </Link>
           </div>
         </div>
       )}
