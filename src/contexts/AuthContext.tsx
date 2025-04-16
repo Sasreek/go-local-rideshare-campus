@@ -5,7 +5,7 @@ import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-// Define the User type
+// Define the Profile type
 type Profile = {
   id: string;
   full_name?: string;
@@ -49,6 +49,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
 
       try {
+        // Fix the error by checking if 'profiles' table exists first
+        // or commenting out this code until the table is created
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
